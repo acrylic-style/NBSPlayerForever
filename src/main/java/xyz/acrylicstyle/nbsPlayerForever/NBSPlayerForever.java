@@ -65,34 +65,35 @@ public class NBSPlayerForever extends JavaPlugin implements Listener {
     }
 
     private void playSong(Player player, int index) {
-        playSong(player, songs.get(index % songs.size())).thenDo(v -> playSong(player, index + 1));
+        playSong(player, songs.get(index % songs.size())).thenDo(v -> playSong(player, index + 1)).onCatch(t -> {});
     }
 
     private @NotNull Promise<Void> playSong(Player player, BukkitNBSFile file) {
-        AtomicBoolean cancelled = new AtomicBoolean(false);
-        file.getBukkitTicks().forEach(tick -> new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (cancelled.get()) return;
-                if (!player.isOnline()) {
-                    cancelled.set(true);
-                    return;
+        return new Promise<>(context -> {
+            AtomicBoolean cancelled = new AtomicBoolean(false);
+            file.getBukkitTicks().forEach(tick -> new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (cancelled.get()) return;
+                    if (!player.isOnline()) {
+                        context.reject(new Throwable());
+                        cancelled.set(true);
+                        return;
+                    }
+                    tick.getPlayableBukkitLayers().forEach(note -> note.play(player));
                 }
-                tick.getPlayableBukkitLayers().forEach(note -> note.play(player));
-            }
-        }.runTaskLater(this, tick.getTick()));
-        BukkitNBSTick tick = (BukkitNBSTick) file.getLastTick();
-        if (tick != null) {
-            return new Promise<>(context -> {
+            }.runTaskLater(this, tick.getTick()));
+            BukkitNBSTick tick = (BukkitNBSTick) file.getLastTick();
+            if (tick != null) {
                 new BukkitRunnable() {
                     @Override
                     public void run() {
                         context.resolve();
                     }
                 }.runTaskLater(this, tick.getTick() + 10);
-            });
-        } else {
-            return Promise.resolve(null);
-        }
+            } else {
+                context.resolve();
+            }
+        });
     }
 }
